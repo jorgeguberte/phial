@@ -19,7 +19,11 @@ defmodule Phial.Actions.DelegateToSwarm do
   @impl true
   def run(%{prompt: prompt}, context) do
     listener = context[:runtime_listener]
-    notify(listener, {:phial_tool_event, :delegate_to_swarm, :started})
+
+    notify(
+      listener,
+      {:phial_tool_event, :delegate_to_swarm, :started, %{input: %{prompt: prompt}}}
+    )
 
     case Phial.Swarm.start(prompt) do
       {:ok, orchestrator} ->
@@ -27,23 +31,34 @@ defmodule Phial.Actions.DelegateToSwarm do
 
         try do
           with {:ok, snapshot} <- Phial.Swarm.await(orchestrator, 300_000) do
-            notify(listener, {:phial_swarm_completed, snapshot})
-            notify(listener, {:phial_tool_event, :delegate_to_swarm, :completed})
+            output = %{
+              recommendation: snapshot.state.recommendation,
+              perspectives: snapshot.state.results,
+              restarts: snapshot.state.restarts,
+              messages: snapshot.state.messages
+            }
 
-            {:ok,
-             %{
-               recommendation: snapshot.state.recommendation,
-               perspectives: snapshot.state.results,
-               restarts: snapshot.state.restarts,
-               messages: snapshot.state.messages
-             }}
+            notify(listener, {:phial_swarm_completed, snapshot})
+
+            notify(
+              listener,
+              {:phial_tool_event, :delegate_to_swarm, :completed,
+               %{input: %{prompt: prompt}, output: output}}
+            )
+
+            {:ok, output}
           end
         after
           if Process.alive?(orchestrator), do: GenServer.stop(orchestrator)
         end
 
       {:error, reason} ->
-        notify(listener, {:phial_tool_event, :delegate_to_swarm, {:failed, reason}})
+        notify(
+          listener,
+          {:phial_tool_event, :delegate_to_swarm, {:failed, reason},
+           %{input: %{prompt: prompt}, output: %{error: reason}}}
+        )
+
         {:error, reason}
     end
   end

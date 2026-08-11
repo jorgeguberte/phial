@@ -19,6 +19,7 @@ defmodule PhialWeb.InspectorLive do
         roles: @roles,
         run_started_at: nil,
         run_status: :idle,
+        selected_event_id: nil,
         messages: [
           message(:assistant, "Ask a real question. I’ll show you every process it wakes up.")
         ],
@@ -59,7 +60,8 @@ defmodule PhialWeb.InspectorLive do
          assign(socket,
            run_status: :dispatching,
            messages: socket.assigns.messages ++ [message(:user, prompt)],
-           local_events: [runtime_event(:chat, "Prompt dispatched")],
+           local_events: [runtime_event(:chat, "Prompt dispatched", %{input: prompt})],
+           selected_event_id: nil,
            snapshot: nil,
            orchestrator: nil,
            orchestrator_ref: nil,
@@ -72,28 +74,41 @@ defmodule PhialWeb.InspectorLive do
     with {:ok, role} <- parse_role(role),
          orchestrator when is_pid(orchestrator) <- socket.assigns.orchestrator,
          {:ok, killed_pid} <- Swarm.kill(orchestrator, role) do
-      event = runtime_event(:kill, "Killed #{role} #{inspect(killed_pid)}")
+      event =
+        runtime_event(:kill, "Killed #{role} #{inspect(killed_pid)}", %{
+          input: %{role: role, signal: :kill},
+          output: %{pid: killed_pid}
+        })
+
       {:noreply, update(socket, :local_events, &[event | &1])}
     else
       _error -> {:noreply, put_flash(socket, :error, "That process is no longer alive.")}
     end
   end
 
+  def handle_event("toggle_event", %{"id" => id}, socket) do
+    selected = if socket.assigns.selected_event_id == id, do: nil, else: id
+    {:noreply, assign(socket, selected_event_id: selected)}
+  end
+
   @impl true
-  def handle_info({:phial_tool_event, :delegate_to_swarm, :started}, socket) do
-    event = runtime_event(:tool, "delegate_to_swarm called")
+  def handle_info({:phial_tool_event, :delegate_to_swarm, :started, trace}, socket) do
+    event = runtime_event(:tool, "delegate_to_swarm called", trace)
 
     {:noreply,
      assign(socket, run_status: :running, local_events: [event | socket.assigns.local_events])}
   end
 
-  def handle_info({:phial_tool_event, :delegate_to_swarm, :completed}, socket) do
-    event = runtime_event(:tool, "delegate_to_swarm completed")
+  def handle_info({:phial_tool_event, :delegate_to_swarm, :completed, trace}, socket) do
+    event = runtime_event(:tool, "delegate_to_swarm completed", trace)
     {:noreply, update(socket, :local_events, &[event | &1])}
   end
 
-  def handle_info({:phial_tool_event, :delegate_to_swarm, {:failed, reason}}, socket) do
-    event = runtime_event(:error, "delegate_to_swarm failed: #{inspect(reason)}")
+  def handle_info(
+        {:phial_tool_event, :delegate_to_swarm, {:failed, reason}, trace},
+        socket
+      ) do
+    event = runtime_event(:error, "delegate_to_swarm failed: #{inspect(reason)}", trace)
 
     {:noreply,
      assign(socket, run_status: :failed, local_events: [event | socket.assigns.local_events])}
@@ -120,7 +135,12 @@ defmodule PhialWeb.InspectorLive do
 
   def handle_info({:phial_chat_result, {:ok, result}}, socket) do
     answer = result_text(result)
-    event = runtime_event(:chat, "Response received")
+
+    event =
+      runtime_event(:chat, "Response received", %{
+        input: latest_user_prompt(socket.assigns.messages),
+        output: answer
+      })
 
     {:noreply,
      assign(socket,
@@ -131,7 +151,11 @@ defmodule PhialWeb.InspectorLive do
   end
 
   def handle_info({:phial_chat_result, {:error, reason}}, socket) do
-    event = runtime_event(:error, "Chat failed: #{inspect(reason)}")
+    event =
+      runtime_event(:error, "Chat failed: #{inspect(reason)}", %{
+        input: latest_user_prompt(socket.assigns.messages),
+        output: %{error: reason}
+      })
 
     {:noreply,
      assign(socket,
@@ -315,13 +339,53 @@ defmodule PhialWeb.InspectorLive do
             <article
               :for={event <- runtime_events(@snapshot, @local_events)}
               id={event_id(event)}
-              class={["event-row", "event-row--#{event_tone(event)}"]}
+              class={[
+                "event-row",
+                "event-row--#{event_tone(event)}",
+                selected_event?(@selected_event_id, event) && "event-row--expanded"
+              ]}
             >
-              <time>{elapsed(event, @run_started_at)}</time>
-              <span class="event-node" aria-hidden="true"></span>
-              <div>
-                <strong>{event_title(event)}</strong>
-                <p>{event_detail(event)}</p>
+              <button
+                type="button"
+                class="event-trigger"
+                phx-click="toggle_event"
+                phx-value-id={event_id(event)}
+                aria-expanded={selected_event?(@selected_event_id, event)}
+              >
+                <time>{elapsed(event, @run_started_at)}</time>
+                <span class="event-node" aria-hidden="true"></span>
+                <span class="event-summary">
+                  <strong>{event_title(event)}</strong>
+                  <span>{event_detail(event)}</span>
+                </span>
+                <svg class="event-chevron" viewBox="0 0 20 20" aria-hidden="true">
+                  <path d="m6 8 4 4 4-4" />
+                </svg>
+              </button>
+
+              <div
+                :if={selected_event?(@selected_event_id, event)}
+                class="event-inspector"
+              >
+                <div :if={event_metadata(event) != []} class="trace-meta">
+                  <span :for={{label, value} <- event_metadata(event)}>
+                    <small>{label}</small><code>{value}</code>
+                  </span>
+                </div>
+
+                <section :if={Map.has_key?(event, :input)} class="trace-payload">
+                  <span class="trace-direction trace-direction--sent">Sent</span>
+                  <pre>{format_payload(event.input)}</pre>
+                </section>
+
+                <section :if={Map.has_key?(event, :output)} class="trace-payload">
+                  <span class="trace-direction trace-direction--returned">Returned</span>
+                  <pre>{format_payload(event.output)}</pre>
+                </section>
+
+                <p :if={!event_has_payload?(event)} class="trace-empty">
+                  This lifecycle event has metadata only.
+                </p>
               </div>
             </article>
           </div>
@@ -515,8 +579,45 @@ defmodule PhialWeb.InspectorLive do
   defp event_tone(%{kind: kind}) when kind in [:worker_restarted, :worker_started], do: :active
   defp event_tone(_event), do: :neutral
 
-  defp runtime_event(kind, text) do
-    %{kind: kind, text: text, at: System.monotonic_time(:millisecond)}
+  defp selected_event?(selected_id, event), do: selected_id == event_id(event)
+
+  defp event_has_payload?(event) do
+    Map.has_key?(event, :input) or Map.has_key?(event, :output)
+  end
+
+  defp event_metadata(event) do
+    [
+      role: event[:role],
+      from: event[:from],
+      to: event[:to],
+      kind: event[:message_kind],
+      pid: event[:pid],
+      previous_pid: event[:previous_pid]
+    ]
+    |> Enum.reject(fn {_label, value} -> is_nil(value) end)
+    |> Enum.map(fn {label, value} ->
+      {label |> to_string() |> String.replace("_", " "), format_meta(value)}
+    end)
+  end
+
+  defp format_meta(value) when is_pid(value), do: inspect(value)
+  defp format_meta(value) when is_atom(value), do: Atom.to_string(value)
+  defp format_meta(value) when is_binary(value), do: value
+  defp format_meta(value), do: inspect(value)
+
+  defp format_payload(payload) when is_binary(payload), do: payload
+
+  defp format_payload(payload) do
+    inspect(payload,
+      pretty: true,
+      width: 48,
+      limit: :infinity,
+      printable_limit: 50_000
+    )
+  end
+
+  defp runtime_event(kind, text, trace) do
+    Map.merge(%{kind: kind, text: text, at: System.monotonic_time(:millisecond)}, trace)
   end
 
   defp elapsed(_event, nil), do: "+00.0s"
@@ -596,6 +697,15 @@ defmodule PhialWeb.InspectorLive do
 
   defp message(role, content),
     do: %{id: unique_id(), role: role, content: content}
+
+  defp latest_user_prompt(messages) do
+    messages
+    |> Enum.reverse()
+    |> Enum.find_value(fn
+      %{role: :user, content: content} -> content
+      _message -> nil
+    end)
+  end
 
   defp result_text(%{result: result}) when is_binary(result), do: result
   defp result_text(result) when is_binary(result), do: result

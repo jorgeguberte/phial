@@ -64,17 +64,36 @@ defmodule Phial.SwarmTest do
     assert snapshot.state.messages >= 7
     assert snapshot.state.restarts == 0
 
+    mission_event = Enum.find(snapshot.state.events, &(&1.kind == :mission_started))
+
+    researcher_event =
+      Enum.find(snapshot.state.events, &(&1.kind == :worker_result and &1.role == :researcher))
+
+    assert mission_event.input == %{prompt: "choose a database"}
+    assert researcher_event.input == %{role: :researcher, prompt: "choose a database"}
+    assert researcher_event.output == "researcher: choose a database"
+
     GenServer.stop(orchestrator)
   end
 
   test "exposes the supervised swarm as a chat tool action" do
     assert {:ok, result} =
-             Phial.Actions.DelegateToSwarm.run(%{prompt: "choose a database"}, %{})
+             Phial.Actions.DelegateToSwarm.run(%{prompt: "choose a database"}, %{
+               runtime_listener: self()
+             })
 
     assert result.recommendation == "recommendation for choose a database from 3 workers"
     assert Map.keys(result.perspectives) |> Enum.sort() == [:critic, :researcher, :scout]
     assert result.restarts == 0
     assert result.messages >= 7
+
+    assert_receive {:phial_tool_event, :delegate_to_swarm, :started,
+                    %{input: %{prompt: "choose a database"}}}
+
+    assert_receive {:phial_tool_event, :delegate_to_swarm, :completed,
+                    %{input: %{prompt: "choose a database"}, output: output}}
+
+    assert output.recommendation == result.recommendation
   end
 
   test "a killed worker gets a new PID and resumes its assigned mission" do
@@ -109,6 +128,11 @@ defmodule Phial.SwarmTest do
 
     assert {:ok, message_snapshot} = await_a2a(orchestrator, 1, 2_000)
     assert message_snapshot.state.a2a == 1
+
+    message_event = Enum.find(message_snapshot.state.events, &(&1.kind == :a2a_message))
+    assert message_event.input.content == "primary evidence"
+    assert message_event.output.delivered
+    assert message_event.output.pid == critic_pid
 
     inspector = Phial.Swarm.Inspector.render_snapshot(message_snapshot)
     assert inspector =~ "A2A:      1"

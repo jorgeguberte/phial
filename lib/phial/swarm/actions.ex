@@ -32,7 +32,9 @@ defmodule Phial.Swarm.Actions.StartMission do
        a2a: 0,
        a2a_sent: %{},
        restarts: 0,
-       events: [%{kind: :mission_started, at: now()}]
+       events: [
+         %{kind: :mission_started, input: %{prompt: prompt}, at: now()}
+       ]
      }, directives}
   end
 
@@ -76,6 +78,7 @@ defmodule Phial.Swarm.Actions.ChildStarted do
           role: role,
           pid: pid,
           previous_pid: previous_pid,
+          input: %{role: role, prompt: state.prompt},
           at: now()
         })
     }
@@ -129,6 +132,7 @@ defmodule Phial.Swarm.Actions.ChildExited do
                role: role,
                pid: pid,
                reason: reason,
+               output: %{reason: reason},
                at: System.monotonic_time(:millisecond)
              }
              | context.state.events
@@ -168,6 +172,8 @@ defmodule Phial.Swarm.Actions.RecordResult do
               kind: :worker_result,
               role: role,
               pid: pid,
+              input: %{role: role, prompt: context.state.prompt},
+              output: result,
               at: System.monotonic_time(:millisecond)
             }
             | context.state.events

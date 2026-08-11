@@ -63,6 +63,10 @@ defmodule PhialWeb.InspectorLiveTest do
     assert render(view) =~ "No swarm needed for this turn"
     assert render(view) =~ "Response received"
     refute has_element?(view, "#agent-researcher")
+
+    render_click(element(view, ".event-trigger"))
+    assert render(view) =~ "Returned"
+    assert render(view) =~ "Esta resposta"
   end
 
   test "keeps the centered conversation in a bounded scroll container" do
@@ -72,6 +76,8 @@ defmodule PhialWeb.InspectorLiveTest do
     assert css =~ "height: 0;"
     assert css =~ "overflow-y: auto;"
     assert css =~ "overscroll-behavior: contain;"
+    assert css =~ ".graph-panel .worker-grid"
+    assert css =~ "grid-template-columns: minmax(0, 1fr);"
   end
 
   test "shows real PIDs, A2A traffic and a supervised worker restart" do
@@ -96,6 +102,13 @@ defmodule PhialWeb.InspectorLiveTest do
              )
 
     assert_eventually(fn -> render(view) =~ "researcher → critic · evidence" end)
+
+    render_click(element(view, ".event-row--message .event-trigger"))
+    trace_html = render(view)
+    assert trace_html =~ "Sent"
+    assert trace_html =~ "runtime evidence"
+    assert trace_html =~ "Returned"
+    assert trace_html =~ "delivered: true"
 
     assert {:ok, critic_pid} = await_child(orchestrator, :critic, 2_000)
     render_click(element(view, "#kill-critic"))

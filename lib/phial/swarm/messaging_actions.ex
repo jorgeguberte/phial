@@ -43,6 +43,8 @@ defmodule Phial.Swarm.Actions.RouteMessage do
           from: from,
           to: to,
           message_kind: kind,
+          input: payload,
+          output: %{delivered: true, pid: state.pids[to]},
           at: System.monotonic_time(:millisecond)
         }
 
