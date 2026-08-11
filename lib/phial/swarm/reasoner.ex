@@ -20,7 +20,7 @@ defmodule Phial.Swarm.Reasoner do
     config = %{
       model: :phial,
       system_prompt: Roles.system_prompt(role),
-      tools: worker_tools(role),
+      tools: tools_for(role),
       max_iterations: 4,
       max_tokens: 1_200,
       streaming: false,
@@ -43,10 +43,14 @@ defmodule Phial.Swarm.Reasoner do
     error -> {:error, error}
   end
 
-  defp worker_tools(role) when role in [:researcher, :critic, :scout],
+  @doc false
+  def tools_for(:scout),
+    do: [Phial.Swarm.SendMessage, Phial.Swarm.WebSearch]
+
+  def tools_for(role) when role in [:researcher, :critic],
     do: [Phial.Swarm.SendMessage]
 
-  defp worker_tools(_role), do: []
+  def tools_for(_role), do: []
 
   @spec synthesize(String.t(), %{atom() => String.t()}) :: {:ok, String.t()} | {:error, term()}
   def synthesize(prompt, results) do

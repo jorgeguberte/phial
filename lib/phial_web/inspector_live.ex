@@ -543,7 +543,7 @@ defmodule PhialWeb.InspectorLive do
   end
 
   defp event_id(event) do
-    parts = [event.kind, event[:role], event[:from], event[:to], event[:at]]
+    parts = [event.kind, event[:role], event[:tool], event[:from], event[:to], event[:at]]
     "event-#{:erlang.phash2(parts)}"
   end
 
@@ -553,6 +553,10 @@ defmodule PhialWeb.InspectorLive do
   defp event_title(%{kind: :worker_crashed, role: role}), do: "#{role_label(role)} crashed"
   defp event_title(%{kind: :worker_stopped, role: role}), do: "#{role_label(role)} stopped"
   defp event_title(%{kind: :worker_result, role: role}), do: "#{role_label(role)} reported"
+
+  defp event_title(%{kind: :worker_tool, role: role, tool: tool}),
+    do: "#{role_label(role)} · #{tool}"
+
   defp event_title(%{kind: :a2a_message}), do: "send_message"
   defp event_title(%{kind: :tool}), do: "Tool call"
   defp event_title(%{kind: :kill}), do: "Process signal"
@@ -569,6 +573,9 @@ defmodule PhialWeb.InspectorLive do
 
   defp event_detail(%{kind: :worker_started, pid: pid}), do: pid_text(pid)
 
+  defp event_detail(%{kind: :worker_tool, status: status, duration_ms: duration_ms}),
+    do: "#{status} · #{duration_ms} ms"
+
   defp event_detail(%{kind: kind, text: text}) when kind in [:tool, :kill, :chat, :error],
     do: text
 
@@ -576,6 +583,8 @@ defmodule PhialWeb.InspectorLive do
 
   defp event_tone(%{kind: kind}) when kind in [:worker_crashed, :error, :kill], do: :danger
   defp event_tone(%{kind: :a2a_message}), do: :message
+  defp event_tone(%{kind: :worker_tool, status: :error}), do: :danger
+  defp event_tone(%{kind: :worker_tool}), do: :message
   defp event_tone(%{kind: kind}) when kind in [:worker_restarted, :worker_started], do: :active
   defp event_tone(_event), do: :neutral
 
@@ -591,6 +600,9 @@ defmodule PhialWeb.InspectorLive do
       from: event[:from],
       to: event[:to],
       kind: event[:message_kind],
+      tool: event[:tool],
+      status: event[:status],
+      duration: if(event[:duration_ms], do: "#{event.duration_ms} ms"),
       pid: event[:pid],
       previous_pid: event[:previous_pid]
     ]

@@ -21,6 +21,7 @@ defmodule Phial.Swarm.OrchestratorAgent do
       {"jido.agent.child.started", Phial.Swarm.Actions.ChildStarted},
       {"jido.agent.child.exit", Phial.Swarm.Actions.ChildExited},
       {"phial.worker.message", Phial.Swarm.Actions.RouteMessage},
+      {"phial.worker.tool_trace", Phial.Swarm.Actions.RecordToolTrace},
       {"phial.worker.result", Phial.Swarm.Actions.RecordResult}
     ]
 end

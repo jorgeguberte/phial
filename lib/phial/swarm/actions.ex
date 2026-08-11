@@ -288,3 +288,36 @@ defmodule Phial.Swarm.Actions.RunWorker do
   defp parent_pid(%{state: %{__parent__: %{pid: pid}}}) when is_pid(pid), do: {:ok, pid}
   defp parent_pid(_agent), do: {:error, :worker_has_no_parent}
 end
+
+defmodule Phial.Swarm.Actions.RecordToolTrace do
+  @moduledoc false
+
+  use Jido.Action,
+    name: "record_worker_tool_trace",
+    description: "Records an observable tool call made by a swarm worker",
+    schema: [
+      role: [type: :atom, required: true],
+      tool: [type: :atom, required: true],
+      input: [type: :map, required: true],
+      output: [type: :any, required: true],
+      status: [type: :atom, required: true],
+      duration_ms: [type: :integer, required: true]
+    ]
+
+  @impl true
+  def run(params, context) do
+    event =
+      params
+      |> Map.take([:role, :tool, :input, :output, :status, :duration_ms])
+      |> Map.merge(%{
+        kind: :worker_tool,
+        at: System.monotonic_time(:millisecond)
+      })
+
+    {:ok,
+     %{
+       messages: context.state.messages + 1,
+       events: Enum.take([event | context.state.events], 50)
+     }}
+  end
+end

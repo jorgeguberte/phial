@@ -177,6 +177,24 @@ orchestrator. `--timeout` controla o limite total em milissegundos (padrão: 5
 minutos). `PHIAL_ACTION_TIMEOUT_MS` controla o teto de cada Action/loop ReAct
 (padrão: 5 minutos), importante para endpoints locais ou modelos lentos.
 
+### Busca web do Scout com Firecrawl
+
+O Scout possui uma capability exclusiva `web_search(query, limit)`. Ela usa o
+SDK oficial Elixir do Firecrawl para pesquisar a web e devolver títulos, URLs,
+descrições e trechos Markdown ao ReAct loop. Researcher e Critic não recebem
+essa tool.
+
+Configure no `.env`:
+
+```dotenv
+FIRECRAWL_API_KEY=fc-YOUR-API-KEY
+```
+
+Cada chamada aceita entre 1 e 5 resultados. O Phial limita o Markdown de cada
+fonte para não inundar o contexto do modelo, orienta o Scout a citar as URLs e
+registra input, output, duração e status no Event Stream. Para uma instalação
+self-hosted, defina também `FIRECRAWL_BASE_URL` incluindo o prefixo `/v2`.
+
 ## Rodar com Docker
 
 Se Elixir não estiver instalado no host:

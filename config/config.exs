@@ -18,4 +18,6 @@ config :jido_ai,
 
 config :phoenix, :json_library, Jason
 
+config :firecrawl, api_key: System.get_env("FIRECRAWL_API_KEY")
+
 import_config "#{config_env()}.exs"

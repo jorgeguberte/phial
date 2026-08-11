@@ -22,6 +22,7 @@ defmodule Phial.MixProject do
     [
       {:jido, "~> 2.3"},
       {:jido_ai, "~> 2.3"},
+      {:firecrawl, "~> 1.8"},
       {:phoenix, "~> 1.8.10"},
       {:phoenix_html, "~> 4.3"},
       {:phoenix_live_view, "~> 1.2.7"},
