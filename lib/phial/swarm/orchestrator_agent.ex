@@ -11,6 +11,8 @@ defmodule Phial.Swarm.OrchestratorAgent do
       results: [type: :map, default: %{}],
       recommendation: [type: :string, default: ""],
       messages: [type: :integer, default: 0],
+      a2a: [type: :integer, default: 0],
+      a2a_sent: [type: :map, default: %{}],
       restarts: [type: :integer, default: 0],
       events: [type: {:list, :map}, default: []]
     ],
@@ -18,6 +20,7 @@ defmodule Phial.Swarm.OrchestratorAgent do
       {"phial.swarm.start", Phial.Swarm.Actions.StartMission},
       {"jido.agent.child.started", Phial.Swarm.Actions.ChildStarted},
       {"jido.agent.child.exit", Phial.Swarm.Actions.ChildExited},
+      {"phial.worker.message", Phial.Swarm.Actions.RouteMessage},
       {"phial.worker.result", Phial.Swarm.Actions.RecordResult}
     ]
 end

@@ -19,4 +19,19 @@ defmodule Phial.ChatAgentTest do
 
     assert ChatAgent.name() == "phial_chat"
   end
+
+  test "accepts the Jido tool lifecycle signal used for observability" do
+    id = "test-chat-lifecycle-#{System.unique_integer([:positive, :monotonic])}"
+    assert {:ok, pid} = Phial.start_chat(id)
+
+    signal =
+      Jido.Signal.new!("ai.tool.started", %{
+        call_id: "test-call",
+        tool_name: "delegate_to_swarm",
+        arguments: %{}
+      })
+
+    assert {:ok, _agent} = Jido.AgentServer.call(pid, signal)
+    GenServer.stop(pid)
+  end
 end

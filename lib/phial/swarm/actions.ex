@@ -29,6 +29,8 @@ defmodule Phial.Swarm.Actions.StartMission do
        results: %{},
        recommendation: "",
        messages: 1,
+       a2a: 0,
+       a2a_sent: %{},
        restarts: 0,
        events: [%{kind: :mission_started, at: now()}]
      }, directives}
@@ -206,29 +208,47 @@ defmodule Phial.Swarm.Actions.RunWorker do
   def run(%{prompt: prompt}, context) do
     role = Roles.role_for(context.agent.agent_module)
     reasoner = Application.get_env(:phial, :swarm_reasoner, Reasoner)
+    worker_pid = context[:agent_server_pid]
 
+    case parent_pid(context.agent) do
+      {:ok, parent_pid} ->
+        child_spec =
+          Task.child_spec(fn ->
+            execute(reasoner, role, prompt, worker_pid, parent_pid, context.agent.id)
+          end)
+
+        {:ok, %{status: :thinking}, [Directive.spawn(child_spec, {:worker_reasoner, role})]}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc false
+  def execute(reasoner, role, prompt, worker_pid, parent_pid, agent_id) do
     result =
-      case run_while_agent_alive(reasoner, role, prompt, context[:agent_server_pid]) do
+      case run_while_agent_alive(reasoner, role, prompt, worker_pid, parent_pid) do
         {:ok, text} when is_binary(text) -> text
         {:error, reason} -> "Worker failed: #{inspect(reason)}"
         other -> "Unexpected worker result: #{inspect(other)}"
       end
 
-    signal =
-      Signal.new!(
-        "phial.worker.result",
-        %{role: role, pid: self(), result: result},
-        source: "/agent/#{context.agent.id}"
-      )
+    if is_pid(worker_pid) and Process.alive?(worker_pid) and Process.alive?(parent_pid) do
+      signal =
+        Signal.new!(
+          "phial.worker.result",
+          %{role: role, pid: worker_pid, result: result},
+          source: "/agent/#{agent_id}"
+        )
 
-    directives = [Directive.emit_to_parent(context.agent, signal)] |> Enum.reject(&is_nil/1)
-
-    {:ok, %{status: :completed}, directives}
+      Jido.AgentServer.cast(parent_pid, signal)
+    end
   end
 
-  defp run_while_agent_alive(reasoner, role, prompt, agent_server_pid)
+  defp run_while_agent_alive(reasoner, role, prompt, agent_server_pid, parent_pid)
        when is_pid(agent_server_pid) do
-    task = Task.async(fn -> reasoner.run(role, prompt) end)
+    tool_context = %{parent_pid: parent_pid, from: role}
+    task = Task.async(fn -> invoke_reasoner(reasoner, role, prompt, tool_context) end)
     agent_ref = Process.monitor(agent_server_pid)
 
     receive do
@@ -247,7 +267,18 @@ defmodule Phial.Swarm.Actions.RunWorker do
     end
   end
 
-  defp run_while_agent_alive(reasoner, role, prompt, _agent_server_pid) do
-    reasoner.run(role, prompt)
+  defp run_while_agent_alive(reasoner, role, prompt, _agent_server_pid, parent_pid) do
+    invoke_reasoner(reasoner, role, prompt, %{parent_pid: parent_pid, from: role})
   end
+
+  defp invoke_reasoner(reasoner, role, prompt, tool_context) do
+    if Code.ensure_loaded?(reasoner) and function_exported?(reasoner, :run, 3) do
+      reasoner.run(role, prompt, tool_context)
+    else
+      reasoner.run(role, prompt)
+    end
+  end
+
+  defp parent_pid(%{state: %{__parent__: %{pid: pid}}}) when is_pid(pid), do: {:ok, pid}
+  defp parent_pid(_agent), do: {:error, :worker_has_no_parent}
 end

@@ -28,6 +28,15 @@ defmodule Phial.Swarm.Inspector do
         "#{connector} #{dot(status)} #{pad(role, 12)} #{pad(pid_text(pid), 18)} #{status}"
       end)
 
+    a2a_rows =
+      state.events
+      |> Enum.filter(&(&1.kind == :a2a_message))
+      |> Enum.take(3)
+      |> Enum.reverse()
+      |> Enum.map(fn event ->
+        "#{pad(event.from, 10)} → #{pad(event.to, 10)} #{event.message_kind}"
+      end)
+
     [
       "PHIAL",
       "",
@@ -35,8 +44,10 @@ defmodule Phial.Swarm.Inspector do
       rows,
       "",
       "Messages: #{state.messages}",
+      "A2A:      #{state.a2a}",
       "Agents:   #{1 + map_size(snapshot.children)}",
-      "Restarts: #{state.restarts}"
+      "Restarts: #{state.restarts}",
+      if(a2a_rows == [], do: [], else: ["", a2a_rows])
     ]
     |> List.flatten()
     |> Enum.join("\n")

@@ -7,6 +7,7 @@ defmodule Phial.ChatAgent do
     model: :phial,
     tools: [Phial.Actions.Greet, Phial.Actions.DelegateToSwarm],
     tool_timeout_ms: 300_000,
+    signal_routes: [{"ai.tool.started", Jido.Actions.Control.Noop}],
     system_prompt: """
     Você é Phial, um assistente prestativo e conciso. Responda em português,
     exceto quando o usuário pedir outro idioma. Quando o usuário pedir para

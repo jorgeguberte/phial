@@ -5,15 +5,22 @@ defmodule Phial.Swarm.Reasoner do
   alias Phial.Swarm.Roles
 
   @callback run(atom(), String.t()) :: {:ok, String.t()} | {:error, term()}
+  @callback run(atom(), String.t(), map()) :: {:ok, String.t()} | {:error, term()}
   @callback synthesize(String.t(), %{atom() => String.t()}) ::
               {:ok, String.t()} | {:error, term()}
+  @optional_callbacks run: 3
 
   @spec run(atom(), String.t()) :: {:ok, String.t()} | {:error, term()}
   def run(role, prompt) do
+    run(role, prompt, %{})
+  end
+
+  @spec run(atom(), String.t(), map()) :: {:ok, String.t()} | {:error, term()}
+  def run(role, prompt, tool_context) when is_map(tool_context) do
     config = %{
       model: :phial,
       system_prompt: Roles.system_prompt(role),
-      tools: [],
+      tools: worker_tools(role),
       max_iterations: 4,
       max_tokens: 1_200,
       streaming: false,
@@ -21,7 +28,7 @@ defmodule Phial.Swarm.Reasoner do
       capture_deltas?: false
     }
 
-    case ReAct.run(prompt, config) do
+    case ReAct.run(prompt, config, context: tool_context) do
       %{result: result, termination_reason: reason}
       when is_binary(result) and reason in [:final_answer, :completed] ->
         {:ok, result}
@@ -35,6 +42,11 @@ defmodule Phial.Swarm.Reasoner do
   rescue
     error -> {:error, error}
   end
+
+  defp worker_tools(role) when role in [:researcher, :critic, :scout],
+    do: [Phial.Swarm.SendMessage]
+
+  defp worker_tools(_role), do: []
 
   @spec synthesize(String.t(), %{atom() => String.t()}) :: {:ok, String.t()} | {:error, term()}
   def synthesize(prompt, results) do
