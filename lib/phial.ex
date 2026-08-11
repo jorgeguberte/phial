@@ -6,8 +6,7 @@ defmodule Phial do
   in the agent state.
   """
 
-  alias Phial.GreeterAgent
-  alias Phial.ChatAgent
+  alias Phial.{ChatAgent, GreeterAgent, SearchAgent}
 
   @doc "Starts a greeter agent with the given ID."
   @spec start_agent(String.t()) :: DynamicSupervisor.on_start_child()
@@ -45,11 +44,7 @@ defmodule Phial do
   def chat(pid, prompt, opts \\ [])
 
   def chat(pid, prompt, opts) when is_pid(pid) and is_binary(prompt) and is_list(opts) do
-    ChatAgent.ask_sync(
-      pid,
-      Phial.ChatRouting.prompt_for(prompt),
-      Phial.ChatRouting.options_for(prompt, opts)
-    )
+    ChatAgent.ask_sync(pid, prompt, opts)
   end
 
   @doc "Starts a conversational agent, performs one turn, then stops it."
@@ -62,5 +57,27 @@ defmodule Phial do
       GenServer.stop(pid)
       result
     end
+  end
+
+  @doc "Starts a dedicated web-search agent in its own AgentServer process."
+  @spec start_search(String.t()) :: DynamicSupervisor.on_start_child()
+  def start_search(id \\ "search") do
+    Phial.Jido.start_agent(SearchAgent, id: id)
+  end
+
+  @doc "Asks a dedicated search agent and waits for its sourced answer."
+  @spec search(pid(), String.t(), keyword()) :: {:ok, term()} | {:error, term()}
+  def search(pid, prompt, opts \\ [])
+
+  def search(pid, prompt, opts) when is_pid(pid) and is_binary(prompt) and is_list(opts) do
+    dated_prompt = """
+    Runtime date: #{Date.utc_today()}.
+
+    Search request:
+    #{prompt}
+    """
+
+    opts = Keyword.put_new(opts, :request_transformer, SearchAgent.ForceWebSearch)
+    SearchAgent.ask_sync(pid, dated_prompt, opts)
   end
 end

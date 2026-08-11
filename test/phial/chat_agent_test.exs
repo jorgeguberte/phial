@@ -2,13 +2,13 @@ defmodule Phial.ChatAgentTest do
   use ExUnit.Case, async: false
 
   alias Phial.ChatAgent
-  alias Phial.ChatRouting
 
-  test "declares the greeting and swarm actions as AI tools" do
+  test "declares greeting, search and swarm delegation as AI tools" do
     id = "test-chat-#{System.unique_integer([:positive, :monotonic])}"
     assert {:ok, pid} = Phial.start_chat(id)
 
     assert {:ok, true} = Jido.AI.has_tool?(pid, "greet")
+    assert {:ok, true} = Jido.AI.has_tool?(pid, "delegate_to_search")
     assert {:ok, true} = Jido.AI.has_tool?(pid, "delegate_to_swarm")
     assert Phial.Jido.whereis(id) == pid
 
@@ -36,28 +36,21 @@ defmodule Phial.ChatAgentTest do
     GenServer.stop(pid)
   end
 
-  test "routes requests for recent information deterministically to the swarm" do
-    assert ChatRouting.fresh_web_request?("Informações recentes")
-    assert ChatRouting.fresh_web_request?("Quais são as notícias de Magic hoje?")
-    assert ChatRouting.fresh_web_request?("Latest Elixir releases")
-    refute ChatRouting.fresh_web_request?("Explique o que é OTP")
+  test "the dedicated SearchAgent exposes only web search" do
+    id = "test-search-#{System.unique_integer([:positive, :monotonic])}"
+    assert {:ok, pid} = Phial.start_search(id)
 
-    opts = ChatRouting.options_for("Informações recentes", timeout: 123)
-    assert opts[:timeout] == 123
-    assert opts[:request_transformer] == Phial.ChatRouting.ForceSwarm
+    assert {:ok, true} = Jido.AI.has_tool?(pid, "web_search")
+    assert {:ok, false} = Jido.AI.has_tool?(pid, "delegate_to_swarm")
+    assert {:ok, false} = Jido.AI.has_tool?(pid, "send_message")
 
-    routed_prompt =
-      ChatRouting.prompt_for("Informações recentes", ~D[2026-08-11])
-
-    assert routed_prompt =~ "hoje é 2026-08-11"
-    assert routed_prompt =~ "Informações recentes"
-    assert ChatRouting.prompt_for("Explique OTP", ~D[2026-08-11]) == "Explique OTP"
+    GenServer.stop(pid)
   end
 
-  test "forces delegation only on the first ReAct iteration" do
-    transformer = Phial.ChatRouting.ForceSwarm
+  test "a SearchAgent always performs web search on its first iteration" do
+    transformer = Phial.SearchAgent.ForceWebSearch
 
-    expected_choice = %{type: "tool", name: "delegate_to_swarm"}
+    expected_choice = %{type: "tool", name: "web_search"}
 
     assert {:ok, %{llm_opts: [tool_choice: ^expected_choice]}} =
              transformer.transform_request(%{}, %{iteration: 1}, %{}, %{})

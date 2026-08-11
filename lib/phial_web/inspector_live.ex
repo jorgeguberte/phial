@@ -92,26 +92,45 @@ defmodule PhialWeb.InspectorLive do
   end
 
   @impl true
-  def handle_info({:phial_tool_event, :delegate_to_swarm, :started, trace}, socket) do
-    event = runtime_event(:tool, "delegate_to_swarm called", trace)
+  def handle_info({:phial_tool_event, tool, :started, trace}, socket) do
+    event = runtime_event(:tool, "#{tool} called", trace)
 
     {:noreply,
      assign(socket, run_status: :running, local_events: [event | socket.assigns.local_events])}
   end
 
-  def handle_info({:phial_tool_event, :delegate_to_swarm, :completed, trace}, socket) do
-    event = runtime_event(:tool, "delegate_to_swarm completed", trace)
+  def handle_info({:phial_tool_event, tool, :completed, trace}, socket) do
+    event = runtime_event(:tool, "#{tool} completed", trace)
     {:noreply, update(socket, :local_events, &[event | &1])}
   end
 
   def handle_info(
-        {:phial_tool_event, :delegate_to_swarm, {:failed, reason}, trace},
+        {:phial_tool_event, tool, {:failed, reason}, trace},
         socket
       ) do
-    event = runtime_event(:error, "delegate_to_swarm failed: #{inspect(reason)}", trace)
+    event = runtime_event(:error, "#{tool} failed: #{inspect(reason)}", trace)
 
     {:noreply,
      assign(socket, run_status: :failed, local_events: [event | socket.assigns.local_events])}
+  end
+
+  def handle_info({:phial_search_started, search_pid}, socket) do
+    event =
+      runtime_event(:search_agent, "SearchAgent spawned", %{
+        output: %{pid: inspect(search_pid)}
+      })
+
+    {:noreply,
+     assign(socket, run_status: :running, local_events: [event | socket.assigns.local_events])}
+  end
+
+  def handle_info({:phial_search_stopped, search_pid}, socket) do
+    event =
+      runtime_event(:search_agent_stopped, "SearchAgent stopped", %{
+        output: %{pid: inspect(search_pid)}
+      })
+
+    {:noreply, update(socket, :local_events, &[event | &1])}
   end
 
   def handle_info({:phial_swarm_started, orchestrator}, socket) do
@@ -558,6 +577,8 @@ defmodule PhialWeb.InspectorLive do
     do: "#{role_label(role)} · #{tool}"
 
   defp event_title(%{kind: :a2a_message}), do: "send_message"
+  defp event_title(%{kind: :search_agent}), do: "SearchAgent spawned"
+  defp event_title(%{kind: :search_agent_stopped}), do: "SearchAgent stopped"
   defp event_title(%{kind: :tool}), do: "Tool call"
   defp event_title(%{kind: :kill}), do: "Process signal"
   defp event_title(%{kind: :chat}), do: "Chat"
@@ -575,6 +596,9 @@ defmodule PhialWeb.InspectorLive do
 
   defp event_detail(%{kind: :worker_tool, status: status, duration_ms: duration_ms}),
     do: "#{status} · #{duration_ms} ms"
+
+  defp event_detail(%{kind: :search_agent, text: text}), do: text
+  defp event_detail(%{kind: :search_agent_stopped, text: text}), do: text
 
   defp event_detail(%{kind: kind, text: text}) when kind in [:tool, :kill, :chat, :error],
     do: text
@@ -725,7 +749,7 @@ defmodule PhialWeb.InspectorLive do
 
   defp run_chat(chat_pid, prompt, listener) do
     Phial.chat(chat_pid, prompt,
-      allowed_tools: ["greet", "delegate_to_swarm"],
+      allowed_tools: ["greet", "delegate_to_search", "delegate_to_swarm"],
       timeout: 360_000,
       tool_context: %{runtime_listener: listener}
     )

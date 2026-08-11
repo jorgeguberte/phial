@@ -97,9 +97,9 @@ Ou abra uma conversa persistente, encerrando com `/sair`:
 mix phial.chat
 ```
 
-O comando restringe explicitamente as ferramentas disponíveis a `greet` e
-`delegate_to_swarm`. A chave nunca é recebida como argumento nem registrada no
-estado do agente.
+O comando restringe explicitamente as ferramentas disponíveis a `greet`,
+`delegate_to_search` e `delegate_to_swarm`. As chaves nunca são recebidas como
+argumento nem registradas no estado do agente.
 
 ### Runtime inspector no navegador
 
@@ -177,12 +177,18 @@ orchestrator. `--timeout` controla o limite total em milissegundos (padrão: 5
 minutos). `PHIAL_ACTION_TIMEOUT_MS` controla o teto de cada Action/loop ReAct
 (padrão: 5 minutos), importante para endpoints locais ou modelos lentos.
 
-### Busca web do Scout com Firecrawl
+### SearchAgent dedicado com Firecrawl
 
-O Scout possui uma capability exclusiva `web_search(query, limit)`. Ela usa o
-SDK oficial Elixir do Firecrawl para pesquisar a web e devolver títulos, URLs,
-descrições e trechos Markdown ao ReAct loop. Researcher e Critic não recebem
-essa tool.
+O `Phial.ChatAgent` decide semanticamente quando uma resposta exige informação
+externa ou mutável e chama `delegate_to_search`. Não existe classificador por
+palavras-chave. A tool cria um `Phial.SearchAgent` em seu próprio processo BEAM;
+esse agente possui somente `web_search(query, limit)` e sempre pesquisa antes de
+responder. Ao terminar, o processo desaparece.
+
+A capability usa o SDK oficial Elixir do Firecrawl para devolver títulos, URLs,
+descrições e trechos Markdown ao ReAct loop. Os workers Researcher, Critic e
+Scout não recebem acesso direto à web. Quando uma tarefa exige busca e análise
+paralela, o ChatAgent pesquisa primeiro e pode enviar as evidências à swarm.
 
 Configure no `.env`:
 
@@ -191,7 +197,7 @@ FIRECRAWL_API_KEY=fc-YOUR-API-KEY
 ```
 
 Cada chamada aceita entre 1 e 5 resultados. O Phial limita o Markdown de cada
-fonte para não inundar o contexto do modelo, orienta o Scout a citar as URLs e
+fonte para não inundar o contexto do modelo, orienta o SearchAgent a citar URLs e
 registra input, output, duração e status no Event Stream. Para uma instalação
 self-hosted, defina também `FIRECRAWL_BASE_URL` incluindo o prefixo `/v2`.
 
@@ -207,10 +213,12 @@ docker run --rm -v "${PWD}:/app" --mount type=volume,source=phial_deps,target=/a
 
 - `Phial.GreeterAgent`: declara estado e roteamento de sinais determinísticos.
 - `Phial.ChatAgent`: agente ReAct conversacional com tool calling.
+- `Phial.SearchAgent`: processo ReAct efêmero dedicado exclusivamente à busca web.
 - `Phial.Swarm.OrchestratorAgent`: mantém missão, PIDs, resultados e lifecycle.
 - `Phial.Swarm.*Agent`: workers BEAM isolados por papel.
 - `Phial.Swarm.Inspector`: visão textual da árvore viva.
 - `Phial.Actions.Greet`: valida a entrada e transforma o estado.
+- `Phial.Actions.DelegateToSearch`: cria, consulta e encerra um SearchAgent.
 - `Phial.Actions.DelegateToSwarm`: expõe a swarm supervisionada como tool do chat.
 - `Phial.Jido`: instância supervisionada do runtime Jido.
 - `Phial`: pequena API pública para iniciar e chamar o agente.

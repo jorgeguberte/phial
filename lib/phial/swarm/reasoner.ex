@@ -44,10 +44,7 @@ defmodule Phial.Swarm.Reasoner do
   end
 
   @doc false
-  def tools_for(:scout),
-    do: [Phial.Swarm.SendMessage, Phial.Swarm.WebSearch]
-
-  def tools_for(role) when role in [:researcher, :critic],
+  def tools_for(role) when role in [:researcher, :critic, :scout],
     do: [Phial.Swarm.SendMessage]
 
   def tools_for(_role), do: []
@@ -68,10 +65,8 @@ defmodule Phial.Swarm.Reasoner do
 
     Produza uma recomendação final clara. Declare a escolha, os principais
     motivos, riscos e a condição que faria você escolher outra alternativa.
-    Se a missão pedir informações atuais ou recentes, use os achados com URLs
-    do Scout como autoridade para fatos que mudam com o tempo. Não apresente
-    como atual uma afirmação sem fonte. Entregue primeiro os fatos confirmados,
-    com datas e links; explique limitações depois, sem esconder achados válidos.
+    Quando a missão incluir evidências com URLs obtidas pelo SearchAgent, preserve
+    as fontes e não contradiga fatos documentados sem justificar a divergência.
     """
 
     run(:orchestrator, synthesis_prompt)

@@ -1,7 +1,7 @@
-defmodule Phial.Swarm.WebSearchTest do
+defmodule Phial.Search.WebSearchTest do
   use ExUnit.Case, async: true
 
-  alias Phial.Swarm.WebSearch
+  alias Phial.Search.WebSearch
 
   defmodule FakeFirecrawl do
     def search_and_scrape(params, opts) do
@@ -66,36 +66,26 @@ defmodule Phial.Swarm.WebSearchTest do
              )
   end
 
-  test "exposes web search only to the Scout" do
-    assert Phial.Swarm.Reasoner.tools_for(:scout) == [
-             Phial.Swarm.SendMessage,
-             Phial.Swarm.WebSearch
-           ]
-
+  test "removes web search from every reasoning worker" do
+    assert Phial.Swarm.Reasoner.tools_for(:scout) == [Phial.Swarm.SendMessage]
     assert Phial.Swarm.Reasoner.tools_for(:researcher) == [Phial.Swarm.SendMessage]
     assert Phial.Swarm.Reasoner.tools_for(:critic) == [Phial.Swarm.SendMessage]
   end
 
-  test "records Firecrawl calls as worker tool trace events" do
-    params = %{
-      role: :scout,
-      tool: :web_search,
-      input: %{query: "BEAM agents", limit: 3},
-      output: %{results: []},
-      status: :ok,
-      duration_ms: 42
-    }
+  test "reports SearchAgent tool calls directly to the runtime listener" do
+    assert {:ok, _result} =
+             WebSearch.run(
+               %{query: "current OTP release", limit: 2},
+               %{
+                 firecrawl_client: FakeFirecrawl,
+                 firecrawl_api_key: "fc-test",
+                 runtime_listener: self()
+               }
+             )
 
-    assert {:ok, updates} =
-             Phial.Swarm.Actions.RecordToolTrace.run(params, %{
-               state: %{messages: 4, events: []}
-             })
+    assert_receive {:phial_tool_event, :web_search, :completed,
+                    %{input: %{query: "current OTP release", limit: 2}, output: output}}
 
-    assert updates.messages == 5
-    assert [event] = updates.events
-    assert event.kind == :worker_tool
-    assert event.role == :scout
-    assert event.input.query == "BEAM agents"
-    assert event.duration_ms == 42
+    assert output.query == "current OTP release"
   end
 end

@@ -48,7 +48,7 @@ defmodule Mix.Tasks.Phial.Chat do
 
   defp ask_and_print(pid, prompt) do
     case Phial.chat(pid, prompt,
-           allowed_tools: ["greet", "delegate_to_swarm"],
+           allowed_tools: ["greet", "delegate_to_search", "delegate_to_swarm"],
            timeout: 360_000
          ) do
       {:ok, snapshot} -> Mix.shell().info("phial> #{result_text(snapshot)}")

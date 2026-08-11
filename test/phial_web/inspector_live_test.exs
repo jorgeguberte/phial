@@ -80,6 +80,33 @@ defmodule PhialWeb.InspectorLiveTest do
     assert css =~ "grid-template-columns: minmax(0, 1fr);"
   end
 
+  test "shows the dedicated SearchAgent lifecycle and web trace" do
+    assert {:ok, view, _html} = live(build_conn(), "/")
+    search_pid = self()
+
+    send(view.pid, {:phial_search_started, search_pid})
+
+    send(
+      view.pid,
+      {:phial_tool_event, :web_search, :completed,
+       %{
+         input: %{query: "Magic 2026 official news", limit: 3},
+         output: %{results: [%{url: "https://magic.wizards.com"}]},
+         status: :ok,
+         duration_ms: 42
+       }}
+    )
+
+    send(view.pid, {:phial_search_stopped, search_pid})
+
+    assert_eventually(fn ->
+      html = render(view)
+
+      html =~ "SearchAgent spawned" and html =~ "web_search completed" and
+        html =~ "SearchAgent stopped"
+    end)
+  end
+
   test "shows real PIDs, A2A traffic and a supervised worker restart" do
     assert {:ok, view, _html} = live(build_conn(), "/")
     assert {:ok, orchestrator} = Swarm.start("inspect the runtime")

@@ -1,5 +1,5 @@
-defmodule Phial.Swarm.WebSearch do
-  @moduledoc "A Scout-only ReAct tool backed by Firecrawl Search."
+defmodule Phial.Search.WebSearch do
+  @moduledoc "Firecrawl Search tool used exclusively by the dedicated SearchAgent."
 
   use Jido.Action,
     name: "web_search",
@@ -12,8 +12,6 @@ defmodule Phial.Swarm.WebSearch do
       query: [type: :string, required: true, doc: "Focused web search query"],
       limit: [type: :integer, default: 3, doc: "Number of results, from 1 to 5"]
     ]
-
-  alias Jido.Signal
 
   @max_results 5
   @excerpt_length 4_000
@@ -131,33 +129,33 @@ defmodule Phial.Swarm.WebSearch do
   defp excerpt(value), do: inspect(value)
 
   defp trace(context, query, limit, result, started_at) do
-    with parent_pid when is_pid(parent_pid) <- context[:parent_pid],
-         role when is_atom(role) <- context[:from] do
-      duration_ms = System.monotonic_time(:millisecond) - started_at
+    duration_ms = System.monotonic_time(:millisecond) - started_at
 
-      {status, output} =
-        case result do
-          {:ok, value} -> {:ok, value}
-          {:error, reason} -> {:error, %{error: inspect(reason)}}
-        end
+    {status, output} =
+      case result do
+        {:ok, value} -> {:ok, value}
+        {:error, reason} -> {:error, %{error: inspect(reason)}}
+      end
 
-      signal =
-        Signal.new!(
-          "phial.worker.tool_trace",
-          %{
-            role: role,
-            tool: :web_search,
-            input: %{query: query, limit: limit},
-            output: output,
-            status: status,
-            duration_ms: duration_ms
-          },
-          source: "/agent/#{role}"
+    notify_listener(context, query, limit, status, output, duration_ms)
+  end
+
+  defp notify_listener(context, query, limit, status, output, duration_ms) do
+    case context[:runtime_listener] do
+      listener when is_pid(listener) ->
+        send(
+          listener,
+          {:phial_tool_event, :web_search, :completed,
+           %{
+             input: %{query: query, limit: limit},
+             output: output,
+             status: status,
+             duration_ms: duration_ms
+           }}
         )
 
-      Jido.AgentServer.cast(parent_pid, signal)
-    else
-      _missing_context -> :ok
+      _missing_listener ->
+        :ok
     end
   end
 end
