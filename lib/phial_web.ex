@@ -1,7 +1,7 @@
 defmodule PhialWeb do
   @moduledoc false
 
-  def static_paths, do: ~w(assets)
+  def static_paths, do: ~w(assets favicon.svg)
 
   def router do
     quote do

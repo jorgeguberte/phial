@@ -43,9 +43,26 @@ defmodule PhialWeb.InspectorLiveTest do
 
     assert html =~ "Process graph"
     assert html =~ "Event stream"
+    assert html =~ "Chat with Phial"
     assert has_element?(view, "#phial-prompt")
+    assert has_element?(view, "#chat-agent-pid", "#PID")
     assert has_element?(view, "form[phx-submit=submit]")
-    assert render(view) =~ "Send a prompt to wake the process tree"
+    assert render(view) =~ "Swarm sleeping"
+    refute has_element?(view, "#agent-researcher")
+  end
+
+  test "renders a normal chat answer prominently without inventing a swarm" do
+    assert {:ok, view, _html} = live(build_conn(), "/")
+
+    send(view.pid, {:phial_chat_result, {:ok, "Olá! Esta resposta está no chat."}})
+
+    assert_eventually(fn ->
+      has_element?(view, ".message--assistant", "Olá! Esta resposta está no chat.")
+    end)
+
+    assert render(view) =~ "No swarm needed for this turn"
+    assert render(view) =~ "Response received"
+    refute has_element?(view, "#agent-researcher")
   end
 
   test "shows real PIDs, A2A traffic and a supervised worker restart" do

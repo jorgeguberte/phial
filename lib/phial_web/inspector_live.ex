@@ -52,14 +52,7 @@ defmodule PhialWeb.InspectorLive do
 
         {:ok, _task} =
           Task.Supervisor.start_child(PhialWeb.TaskSupervisor, fn ->
-            result =
-              Phial.chat(chat_pid, prompt,
-                allowed_tools: ["greet", "delegate_to_swarm"],
-                timeout: 360_000,
-                tool_context: %{runtime_listener: listener}
-              )
-
-            send(listener, {:phial_chat_result, result})
+            send(listener, {:phial_chat_result, run_chat(chat_pid, prompt, listener)})
           end)
 
         {:noreply,
@@ -127,10 +120,12 @@ defmodule PhialWeb.InspectorLive do
 
   def handle_info({:phial_chat_result, {:ok, result}}, socket) do
     answer = result_text(result)
+    event = runtime_event(:chat, "Response received")
 
     {:noreply,
      assign(socket,
        run_status: :done,
+       local_events: [event | socket.assigns.local_events],
        messages: socket.assigns.messages ++ [message(:assistant, answer)]
      )}
   end
@@ -193,14 +188,59 @@ defmodule PhialWeb.InspectorLive do
 
         <div class="runtime-summary" aria-label="Runtime summary">
           <span class={["connection-dot", connected_class(@chat_pid)]}></span>
-          <span><strong>{agent_count(@snapshot)}</strong> agents</span>
+          <span><strong>{agent_count(@snapshot, @chat_pid)}</strong> agents</span>
           <span class="summary-divider">·</span>
-          <span><strong>{if @snapshot, do: 1, else: 0}</strong> run</span>
+          <span><strong>{if @run_started_at, do: 1, else: 0}</strong> run</span>
           <span class={["run-state", "run-state--#{@run_status}"]}>{state_label(@run_status)}</span>
         </div>
       </header>
 
       <main class="workspace">
+        <section class="chat-panel" aria-labelledby="conversation-title">
+          <div class="panel-heading panel-heading--chat">
+            <div>
+              <p class="eyebrow">Conversation</p>
+              <h2 id="conversation-title">Chat with Phial</h2>
+            </div>
+            <span class="chat-agent-chip">
+              <i></i>
+              <span>ChatAgent</span>
+              <code id="chat-agent-pid">{pid_text(@chat_pid)}</code>
+            </span>
+          </div>
+
+          <div
+            class="conversation"
+            id="conversation"
+            phx-hook="Conversation"
+            aria-live="polite"
+          >
+            <article
+              :for={message <- @messages}
+              id={"message-#{message.id}"}
+              class={["message", "message--#{message.role}"]}
+            >
+              <div class="message-author">
+                <span>{message_label(message.role)}</span>
+                <i></i>
+              </div>
+              <p>{message.content}</p>
+            </article>
+
+            <article
+              :if={@run_status in [:dispatching, :running, :synthesizing]}
+              id="message-pending"
+              class="message message--assistant message--pending"
+            >
+              <div class="message-author"><span>Phial</span><i></i></div>
+              <div class="thinking-dots" aria-label="Phial is responding">
+                <span></span><span></span><span></span>
+              </div>
+              <p>{pending_message(@run_status)}</p>
+            </article>
+          </div>
+        </section>
+
         <section class="graph-panel" aria-labelledby="process-graph-title">
           <div class="panel-heading">
             <div>
@@ -214,7 +254,7 @@ defmodule PhialWeb.InspectorLive do
             </div>
           </div>
 
-          <div class={["process-tree", @snapshot && "process-tree--active"]}>
+          <div :if={@snapshot} class="process-tree process-tree--active">
             <div class="orchestrator-wrap">
               <article class="agent-card agent-card--orchestrator">
                 <div class="card-topline">
@@ -244,17 +284,17 @@ defmodule PhialWeb.InspectorLive do
                 can_kill={can_kill?(@snapshot, role, @orchestrator)}
               />
             </div>
-
-            <div :if={!@snapshot} class="empty-state">
-              <div class="empty-pulse"><span></span><span></span><span></span></div>
-              <p>Send a prompt to wake the process tree.</p>
-              <span>Try “Use a swarm to compare SQLite and PostgreSQL.”</span>
-            </div>
           </div>
 
-          <div :if={latest_answer(@messages)} class="answer-strip">
-            <span class="answer-label">Phial</span>
-            <p>{latest_answer(@messages)}</p>
+          <div :if={!@snapshot} class="graph-empty">
+            <div class="sleeping-core" aria-hidden="true">
+              <span></span><i></i>
+            </div>
+            <div>
+              <strong>{empty_graph_title(@run_status, @messages)}</strong>
+              <p>The swarm only spawns when the prompt benefits from parallel work.</p>
+              <code>Try: “Use the swarm to compare SQLite and PostgreSQL.”</code>
+            </div>
           </div>
         </section>
 
@@ -402,8 +442,6 @@ defmodule PhialWeb.InspectorLive do
 
   defp relevant_signal?(_metadata, _snapshot), do: false
 
-  defp role_data(nil, _role), do: %{status: :idle, pid: "—", inbox: 0}
-
   defp role_data(snapshot, role) do
     pid = snapshot.state.pids[role] || snapshot.children[role]
 
@@ -493,21 +531,18 @@ defmodule PhialWeb.InspectorLive do
   defp state_value(nil, _key), do: 0
   defp state_value(snapshot, key), do: Map.get(snapshot.state, key, 0)
 
-  defp orchestrator_status(nil), do: :idle
-
   defp orchestrator_status(%{state: %{recommendation: recommendation}}) when recommendation != "",
     do: :done
 
   defp orchestrator_status(_snapshot), do: :thinking
 
-  defp orchestrator_pid(nil), do: nil
   defp orchestrator_pid(snapshot), do: snapshot.pid
 
-  defp alive_children(nil), do: 0
   defp alive_children(snapshot), do: map_size(snapshot.children)
 
-  defp agent_count(nil), do: 0
-  defp agent_count(snapshot), do: 1 + map_size(snapshot.children)
+  defp agent_count(nil, pid) when is_pid(pid), do: 1
+  defp agent_count(nil, _pid), do: 0
+  defp agent_count(snapshot, _pid), do: 2 + map_size(snapshot.children)
 
   defp connected_class(pid) when is_pid(pid), do: "connection-dot--online"
   defp connected_class(_pid), do: "connection-dot--offline"
@@ -530,6 +565,20 @@ defmodule PhialWeb.InspectorLive do
 
   defp composer_hint(_status), do: "Complex prompts automatically delegate to the swarm"
 
+  defp pending_message(:dispatching), do: "Deciding whether this needs the swarm…"
+  defp pending_message(:running), do: "The swarm is working in parallel…"
+  defp pending_message(:synthesizing), do: "Combining the workers’ findings…"
+
+  defp empty_graph_title(status, _messages)
+       when status in [:dispatching, :running, :synthesizing],
+       do: "Checking the task"
+
+  defp empty_graph_title(_status, [_welcome]), do: "Swarm sleeping"
+  defp empty_graph_title(_status, _messages), do: "No swarm needed for this turn"
+
+  defp message_label(:assistant), do: "Phial"
+  defp message_label(:user), do: "You"
+
   defp role_label(:researcher), do: "Researcher"
   defp role_label(:critic), do: "Critic"
   defp role_label(:scout), do: "Scout"
@@ -548,18 +597,21 @@ defmodule PhialWeb.InspectorLive do
   defp message(role, content),
     do: %{id: unique_id(), role: role, content: content}
 
-  defp latest_answer(messages) do
-    messages
-    |> Enum.reverse()
-    |> Enum.find_value(fn
-      %{role: :assistant, content: content} -> content
-      _message -> nil
-    end)
-  end
-
   defp result_text(%{result: result}) when is_binary(result), do: result
   defp result_text(result) when is_binary(result), do: result
   defp result_text(result), do: inspect(result, pretty: true)
+
+  defp run_chat(chat_pid, prompt, listener) do
+    Phial.chat(chat_pid, prompt,
+      allowed_tools: ["greet", "delegate_to_swarm"],
+      timeout: 360_000,
+      tool_context: %{runtime_listener: listener}
+    )
+  rescue
+    exception -> {:error, Exception.message(exception)}
+  catch
+    kind, reason -> {:error, {kind, reason}}
+  end
 
   defp unique_id, do: System.unique_integer([:positive, :monotonic])
 end
