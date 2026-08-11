@@ -65,6 +65,15 @@ defmodule PhialWeb.InspectorLiveTest do
     refute has_element?(view, "#agent-researcher")
   end
 
+  test "keeps the centered conversation in a bounded scroll container" do
+    css = File.read!("priv/static/assets/app.css")
+
+    assert css =~ ~s(grid-template-areas: "graph chat events")
+    assert css =~ "height: 0;"
+    assert css =~ "overflow-y: auto;"
+    assert css =~ "overscroll-behavior: contain;"
+  end
+
   test "shows real PIDs, A2A traffic and a supervised worker restart" do
     assert {:ok, view, _html} = live(build_conn(), "/")
     assert {:ok, orchestrator} = Swarm.start("inspect the runtime")

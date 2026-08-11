@@ -6,10 +6,24 @@ const Hooks = {}
 
 Hooks.Conversation = {
   mounted() {
-    this.el.scrollTop = this.el.scrollHeight
+    this.followLatest = true
+    this.handleScroll = () => {
+      const distanceFromBottom = this.el.scrollHeight - this.el.scrollTop - this.el.clientHeight
+      this.followLatest = distanceFromBottom < 80
+    }
+    this.el.addEventListener("scroll", this.handleScroll, {passive: true})
+    this.scrollToLatest()
   },
   updated() {
-    this.el.scrollTo({top: this.el.scrollHeight, behavior: "smooth"})
+    if (this.followLatest) this.scrollToLatest("smooth")
+  },
+  destroyed() {
+    this.el.removeEventListener("scroll", this.handleScroll)
+  },
+  scrollToLatest(behavior = "auto") {
+    requestAnimationFrame(() => {
+      this.el.scrollTo({top: this.el.scrollHeight, behavior})
+    })
   }
 }
 

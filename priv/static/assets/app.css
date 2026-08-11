@@ -1092,26 +1092,35 @@ input:focus-visible {
 }
 
 .workspace {
-  min-height: 620px;
-  height: calc(100vh - 182px);
-  grid-template-columns: minmax(320px, 0.72fr) minmax(540px, 1.35fr) minmax(310px, 0.68fr);
-  grid-template-areas: "chat graph events";
+  min-height: 0;
+  height: max(620px, calc(100vh - 182px));
+  grid-template-columns: minmax(300px, 0.62fr) minmax(560px, 1.4fr) minmax(300px, 0.62fr);
+  grid-template-areas: "graph chat events";
+  overflow: hidden;
 }
 
 .chat-panel {
   grid-area: chat;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background:
     radial-gradient(circle at 0 0, oklch(0.81 0.17 151 / 0.07), transparent 42%),
     oklch(0.132 0.009 240 / 0.86);
-  box-shadow: inset -1px 0 0 var(--line-soft);
+  box-shadow:
+    inset 1px 0 0 var(--line-soft),
+    inset -1px 0 0 var(--line-soft),
+    0 0 42px oklch(0 0 0 / 0.12);
 }
 
 .graph-panel {
   grid-area: graph;
+  min-height: 0;
   padding: 22px;
+  overflow-y: auto;
 }
 
 .event-panel {
@@ -1168,17 +1177,39 @@ input:focus-visible {
 }
 
 .conversation {
+  height: 0;
   min-height: 0;
   padding: 20px;
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
   flex-direction: column;
   gap: 16px;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scroll-behavior: smooth;
+  scrollbar-color: var(--text-3) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.conversation::-webkit-scrollbar {
+  width: 10px;
+}
+
+.conversation::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.conversation::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--text-3);
+  background-clip: padding-box;
 }
 
 .message {
+  flex: 0 0 auto;
   width: fit-content;
   max-width: 94%;
   padding: 14px 15px;
@@ -1378,11 +1409,15 @@ input:focus-visible {
     height: auto;
     grid-template-columns: minmax(300px, 0.72fr) minmax(540px, 1.28fr);
     grid-template-areas:
-      "chat graph"
+      "graph chat"
       "events events";
+    overflow: visible;
   }
 
-  .chat-panel,
+  .chat-panel {
+    height: 620px;
+  }
+
   .graph-panel {
     min-height: 620px;
   }
@@ -1406,7 +1441,11 @@ input:focus-visible {
       "events";
   }
 
-  .chat-panel,
+  .chat-panel {
+    height: min(70vh, 620px);
+    min-height: 480px;
+  }
+
   .graph-panel {
     min-height: 540px;
   }
