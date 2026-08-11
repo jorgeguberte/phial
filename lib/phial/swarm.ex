@@ -10,7 +10,8 @@ defmodule Phial.Swarm do
     id = Keyword.get(opts, :id, "swarm-#{System.unique_integer([:positive, :monotonic])}")
 
     with {:ok, pid} <- Phial.Jido.start_agent(OrchestratorAgent, id: id),
-         signal <- Jido.Signal.new!("phial.swarm.start", %{prompt: prompt}, source: "/phial/user"),
+         signal <-
+           Jido.Signal.new!("phial.swarm.start", %{prompt: prompt}, source: "/phial/user"),
          {:ok, _agent} <- Jido.AgentServer.call(pid, signal) do
       {:ok, pid}
     end
