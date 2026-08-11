@@ -13,7 +13,7 @@ defmodule Phial.MixProject do
 
   def application do
     [
-      extra_applications: [:logger],
+      extra_applications: [:logger, :runtime_tools],
       mod: {Phial.Application, []}
     ]
   end
@@ -21,7 +21,13 @@ defmodule Phial.MixProject do
   defp deps do
     [
       {:jido, "~> 2.3"},
-      {:jido_ai, "~> 2.3"}
+      {:jido_ai, "~> 2.3"},
+      {:phoenix, "~> 1.8.10"},
+      {:phoenix_html, "~> 4.3"},
+      {:phoenix_live_view, "~> 1.2.7"},
+      {:phoenix_pubsub, "~> 2.1"},
+      {:bandit, "~> 1.12"},
+      {:lazy_html, ">= 0.1.0", only: :test}
     ]
   end
 end

@@ -8,8 +8,21 @@ defmodule Phial.Application do
     configure_model_alias()
     configure_action_timeout()
 
-    children = [Phial.Jido]
+    children = [
+      Phial.Jido,
+      {Phoenix.PubSub, name: Phial.PubSub},
+      Phial.RuntimeEvents,
+      {Task.Supervisor, name: PhialWeb.TaskSupervisor},
+      PhialWeb.Endpoint
+    ]
+
     Supervisor.start_link(children, strategy: :one_for_one, name: Phial.Supervisor)
+  end
+
+  @impl true
+  def config_change(changed, _new, removed) do
+    PhialWeb.Endpoint.config_change(changed, removed)
+    :ok
   end
 
   # ReqLLM starts before Phial and loads .env into the process environment. Set

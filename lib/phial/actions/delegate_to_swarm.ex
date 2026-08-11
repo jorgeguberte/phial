@@ -17,11 +17,19 @@ defmodule Phial.Actions.DelegateToSwarm do
     ]
 
   @impl true
-  def run(%{prompt: prompt}, _context) do
+  def run(%{prompt: prompt}, context) do
+    listener = context[:runtime_listener]
+    notify(listener, {:phial_tool_event, :delegate_to_swarm, :started})
+
     case Phial.Swarm.start(prompt) do
       {:ok, orchestrator} ->
+        notify(listener, {:phial_swarm_started, orchestrator})
+
         try do
           with {:ok, snapshot} <- Phial.Swarm.await(orchestrator, 300_000) do
+            notify(listener, {:phial_swarm_completed, snapshot})
+            notify(listener, {:phial_tool_event, :delegate_to_swarm, :completed})
+
             {:ok,
              %{
                recommendation: snapshot.state.recommendation,
@@ -35,7 +43,11 @@ defmodule Phial.Actions.DelegateToSwarm do
         end
 
       {:error, reason} ->
+        notify(listener, {:phial_tool_event, :delegate_to_swarm, {:failed, reason}})
         {:error, reason}
     end
   end
+
+  defp notify(pid, message) when is_pid(pid), do: send(pid, message)
+  defp notify(_listener, _message), do: :ok
 end

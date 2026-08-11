@@ -101,6 +101,29 @@ O comando restringe explicitamente as ferramentas disponíveis a `greet` e
 `delegate_to_swarm`. A chave nunca é recebida como argumento nem registrada no
 estado do agente.
 
+### Runtime inspector no navegador
+
+Inicie a interface Phoenix LiveView:
+
+```bash
+mix phx.server
+```
+
+Abra [http://localhost:4000](http://localhost:4000). A página combina o chat
+com a árvore real de processos BEAM e o stream de eventos da missão. Ela mostra
+PIDs, estados, relações parent/children, mensagens A2A, tool calls e restarts em
+tempo real, sem polling ou SPA separada.
+
+Para uma demonstração determinística, peça explicitamente para usar a swarm:
+
+```text
+Use a swarm para comparar PostgreSQL, SQLite e DynamoDB para um SaaS multi-tenant.
+```
+
+Durante a execução, o botão **Kill** de um worker encerra aquele processo. O
+supervisor o recria com outro PID e a missão continua. O orchestrator ainda não
+tem botão de kill: orphan/adoption será uma etapa posterior do runtime.
+
 ### Usar a swarm dentro do chat
 
 Abra o chat normalmente:
