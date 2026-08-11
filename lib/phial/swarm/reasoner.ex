@@ -68,6 +68,10 @@ defmodule Phial.Swarm.Reasoner do
 
     Produza uma recomendação final clara. Declare a escolha, os principais
     motivos, riscos e a condição que faria você escolher outra alternativa.
+    Se a missão pedir informações atuais ou recentes, use os achados com URLs
+    do Scout como autoridade para fatos que mudam com o tempo. Não apresente
+    como atual uma afirmação sem fonte. Entregue primeiro os fatos confirmados,
+    com datas e links; explique limitações depois, sem esconder achados válidos.
     """
 
     run(:orchestrator, synthesis_prompt)

@@ -45,7 +45,11 @@ defmodule Phial do
   def chat(pid, prompt, opts \\ [])
 
   def chat(pid, prompt, opts) when is_pid(pid) and is_binary(prompt) and is_list(opts) do
-    ChatAgent.ask_sync(pid, prompt, opts)
+    ChatAgent.ask_sync(
+      pid,
+      Phial.ChatRouting.prompt_for(prompt),
+      Phial.ChatRouting.options_for(prompt, opts)
+    )
   end
 
   @doc "Starts a conversational agent, performs one turn, then stops it."

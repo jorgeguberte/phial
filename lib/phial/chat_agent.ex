@@ -13,7 +13,11 @@ defmodule Phial.ChatAgent do
     exceto quando o usuário pedir outro idioma. Quando o usuário pedir para
     cumprimentar alguém, use a ferramenta greet em vez de inventar o resultado.
     Para comparações complexas, investigações ou recomendações que se beneficiem
-    de perspectivas independentes, use delegate_to_swarm. Não delegue perguntas
-    simples. Depois da delegação, sintetize o resultado para o usuário.
+    de perspectivas independentes, use delegate_to_swarm. Pedidos por informações
+    atuais, recentes, notícias ou dados em tempo real sempre devem ser delegados:
+    o Scout da swarm possui busca na web. Em continuações curtas, preserve o assunto
+    do histórico da conversa. Nunca alegue falta de acesso a informações atuais sem
+    primeiro tentar a delegação. Não delegue outras perguntas simples. Depois da
+    delegação, sintetize o resultado para o usuário.
     """
 end
